@@ -1,0 +1,1 @@
+Direccion Ter: http://aca-web.gencat.cat/sdim2/apirest/data/AFORAMENT-EST/CALC001144?limit=500=&from=01/11/2023T00:00:00&to=31/10/2024T23:00:00
