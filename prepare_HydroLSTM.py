@@ -1,3 +1,5 @@
+#globals().clear()
+
 import hydrogr
 from pathlib import Path
 import pandas as pd
@@ -13,7 +15,7 @@ import spotpy
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-#globals().clear()
+
 homedir ="/home/dmercado/Documents/intoDBP/hydro_app/"
 os.chdir(homedir)
 obs_data = pd.read_csv("hydro_cal/aca_data_2017-2024.csv", index_col=0, parse_dates=True)
@@ -27,12 +29,16 @@ obs_data = obs_data.loc[:end_date]
 #reproduce values to have every hour (asusme is the same very 5 min)
 stream_data = obs_data.resample('h').mean()
 
-lat = 41.97
-lon = 2.38
-area = 1502660000.000 #m²
-id = "1"
+test = obs_data.resample('d').mean()
 
-def fetch_historical():
+lat_1 = 41.97
+lon_1 = 2.38
+lat_2 = 42.19
+lon_2 = 2.19
+area = 1502660000.000 #m²
+id = "2"
+
+def fetch_historical(lat, lon):
       # Step 1: Fetch data from the API
     url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
     params = {
@@ -40,7 +46,7 @@ def fetch_historical():
         "longitude": lon,
         "start_date": start_date.date().strftime('%Y-%m-%d'),    # Start date
         "end_date": end_date.date().strftime('%Y-%m-%d'),      # End date
-        "hourly": "precipitation,evapotranspiration",
+        "hourly": "precipitation", #,evapotranspiration
     }
     response = requests.get(url, params=params)
     data = response.json()
@@ -48,36 +54,58 @@ def fetch_historical():
     # Step 2: Extract and prepare data
     timestamps = [datetime.fromisoformat(t) for t in data["hourly"]["time"]]
     precipitation = data["hourly"]["precipitation"]
-    et = data["hourly"]["evapotranspiration"]
+    #et = data["hourly"]["evapotranspiration"]
     
     # Convert to pandas DataFrame
     df = pd.DataFrame({
         "Time": timestamps,
-        "Precipitation (mm)": precipitation,
-        "Evaporation (mm)": et
+        "Precipitation (mm)": precipitation#,
+        #"Evaporation (mm)": et
     })
     df.set_index("Time", inplace=True)
     
     return df
 
-clim_data = fetch_historical()
+clim_data_1 = fetch_historical(lat_1, lon_1)
+clim_data_1 = clim_data_1.iloc[1:] #first row is NAN for precipitation
+clim_data_1.columns =['precipitation']
+clim_data_2 = fetch_historical(lat_2, lon_2)
+clim_data_2 = clim_data_2.iloc[1:] #first row is NAN for precipitation
+clim_data_2.columns =['precipitation']
 
-clim_data.columns =['precipitation', 'et']
+clim_data = (clim_data_1["precipitation"] + clim_data_2["precipitation"])/2
+clim_data = clim_data.to_frame()
 
-#first row is NAN for precipitation
-clim_data = clim_data.iloc[1:]
+time = clim_data.index
+plt.figure(figsize=(10, 6))
+plt.plot(time, clim_data["precipitation"].values, label='mean Precipitation', color='blue')
+plt.plot(time, clim_data_1["precipitation"].values, label='DF1 Precipitation', color='green')
+plt.plot(time, clim_data_2["precipitation"].values, label='DF2 Precipitation', color='orange')
+plt.show()
 
-#desde aqui sí hay datos: df_historical.iloc[30457]
+clim_data.columns =['precipitation']
+
+
+#clim_data = clim_data.iloc[1:]
+
+# Extract accumulated ET for the month
+accumulated_et = pd.read_csv("hydro_cal/Evaporation_ERA5_1940-2024.csv")
+# Convert the index of precipitation_et_df to datetime if it's not already
+clim_data.index = pd.to_datetime(clim_data.index)
+# Extract the month from the Time index
+clim_data.loc[:,'month'] = clim_data.index.month
+# Map the monthly mean values from the monthly_mean DataFrame to the 'et' column
+accumulated_et_dict = dict(zip(accumulated_et['month'], accumulated_et['e']))
+clim_data.loc[:,'et'] = clim_data['month'].map(accumulated_et_dict)
+clim_data = clim_data.drop(columns=['month'])
 
 # Calculate accumulated ET for the month
-accumulated_et = clim_data['et'].resample('ME').sum()
-
+#accumulated_et = clim_data['et'].resample('ME').sum()
 # Add accumulated ET as a new column
-accumulated_et.index = accumulated_et.index.to_period('M')
-clim_data['accumulated_et'] = clim_data.index.to_period('M').map(accumulated_et)
-
+#accumulated_et.index = accumulated_et.index.to_period('M')
+#clim_data['accumulated_et'] = clim_data.index.to_period('M').map(accumulated_et)
 # Drop the original 'et' column
-clim_data = clim_data.drop(columns=['et'])
+#clim_data = clim_data.drop(columns=['et'])
 
 #set final names
 clim_data.columns =['precipitation', 'et']

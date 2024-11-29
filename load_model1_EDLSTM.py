@@ -1,3 +1,4 @@
+#globals().clear()
 import numpy as np
 import pandas as pd
 import tensorflow as tf
@@ -58,6 +59,7 @@ def nseloss(y_true, y_pred):
 # Load the model
 h5_path ='/home/dmercado/Documents/intoDBP/hydro_app/HydroLSTM/1_model1_model.keras'
 model = load_model(h5_path, custom_objects={'nseloss': nseloss})
+#name_id = 'f_2024_11_26_data'
 #name_id = "h_3months_2024_11_24_data"
 name_id = "1_data"
 # Parameters
@@ -93,8 +95,9 @@ def kge(y_true, y_pred):
   
 #plot prediction
 #select which data to plot first:
-y_test_p =y_test[:,0,0]
-y_pred_p = y_pred[:,0]
+horizont = 23
+y_test_p =y_test[:,horizont,0]
+y_pred_p = y_pred[:,horizont]
 
 #now plot
 plt.figure(figsize=(15, 6))
@@ -133,7 +136,7 @@ plt.figtext(0.15, 0.65, f"KGE: {kge_value:.3f}", fontsize=10)
 plt.figtext(0.15, 0.6, f"r: {r_value:.3f}", fontsize=10)
 plt.figtext(0.15, 0.55, f"R²: {r2_value:.3f}", fontsize=10)
 
-plt.savefig("/home/dmercado/Documents/intoDBP/hydro_app/HydroLSTM/data/"+name_id+".pdf", dpi=100)
+plt.savefig("/home/dmercado/Documents/intoDBP/hydro_app/HydroLSTM/data/"+name_id+str(horizont)+".pdf", dpi=100)
 
 
 #plot all 24 prediction for each value

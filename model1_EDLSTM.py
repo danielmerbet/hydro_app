@@ -14,7 +14,9 @@ from sklearn.model_selection import train_test_split
 
 tf.config.list_physical_devices('GPU')
 
-os.chdir("/home/dmercado/Documents/intoDBP/HydroLSTM/")
+homedir ="/home/dmercado/Documents/intoDBP/hydro_app/"
+os.chdir(homedir + "/HydroLSTM/")
+
 def series_to_supervised(data, n_in=1, n_out=1, dropnan=False):
   n_vars = 1 if type(data) is list else data.shape[1]
   df = pd.DataFrame(data)
@@ -39,27 +41,43 @@ def series_to_supervised(data, n_in=1, n_out=1, dropnan=False):
   return pd.DataFrame(agg.astype('float32'))
      
 def train_valid_test_split(data, hours_of_history, hours_to_predict, parameters_included):
-  data_train_valid = data.iloc[:52608,:].copy() # the first 6 years for training/validation
-  data_test = data.iloc[52608:,:].copy() # the last 1 years for test evaluation
+  #data_train_valid = data.iloc[:52608,:].copy() # the first 6 years for training/validation
+  #data_test = data.iloc[52608:,:].copy() # the last 1 years for test evaluation
+  #data_train_valid = data.loc['2024-08-15':'2024-10-31']  # Adjust the range as per your dataset
+  #data_test = data.loc['2024-11-01':'2024-11-11']
+  data_train_valid = data.iloc[:(int(len(data) * 0.89))]
+  data_test = data.iloc[(int(len(data) * 0.89)):]
+
   data_train_valid.dropna(inplace=True)
   data_test.dropna(inplace=True)
 
-  data_valid, data_train = train_test_split(data_train_valid, test_size=0.4, shuffle= False) # the last 60% data in the first 6 years used for training and the first 40% used for validation.
+  #data_valid, data_train = train_test_split(data_train_valid, test_size=0.4, shuffle= False) # the last 60% data in the first 6 years used for training and the first 40% used for validation.
+  data_valid = data_train_valid.iloc[-(int(len(data_train_valid) * 0.14)):]  # Last 40%
+  data_train = data_train_valid.iloc[:-(int(len(data_train_valid) * 0.14))]  # Remaining 60%
+
+  print("Train dataset shape:", data_train.shape)
+  print("Validation dataset shape:", data_valid.shape)
+  print("Test dataset shape:", data_test.shape)
+  print(data_train.head())
 
   return data_train.values, data_valid.values, data_test.values
 
 
-
 def prepare_data(station_id, hours_of_history, hours_to_predict, parameters_included):
 
-  data = pd.read_csv('./data/'+str(station_id)+'_data.csv').iloc[:,1:]
+  #data = pd.read_csv('./data/'+str(station_id)+'_data.csv').iloc[:,1:]
+  data = pd.read_csv('./data/' + str(station_id) + '_data.csv')
+  data['datetime'] = pd.to_datetime(data['datetime'])
+  data.set_index('datetime', inplace=True)
 
   # simple min-max scaling. Other pretreatments such as normalization also work.
   scaler = MinMaxScaler()
-  scaler.fit(data.iloc[:52608,:]) # min-max scaling without the test dataset.
-  q_max = np.max(data.iloc[:52608,2]) # manually check the maximum and minimum discharge
-  q_min = np.min(data.iloc[:52608,2])
-  data_scaled = scaler.transform(data)
+  #scaler.fit(data.iloc[:52608,:]) # min-max scaling without the test dataset.
+  q_max = np.max(data.iloc[:,2]) # manually check the maximum and minimum discharge
+  q_min = np.min(data.iloc[:,2])
+  data_scaled = scaler.fit_transform(data[['precipitation', 'et', 'discharge']])
+  #data_scaled = scaler.transform(data)
+  data[['precipitation', 'et', 'discharge']] = data_scaled
 
   # data split
   data_sequence = series_to_supervised(data_scaled, hours_of_history, hours_to_predict)
@@ -143,15 +161,16 @@ def kge(y_true, y_pred):
 def main():
   
   # parameters
-  station_id = 521
-  hours_to_predict = 24
+  station_id = 2
+  days_to_predict = 1
+  hours_to_predict = 24*days_to_predict
   hours_of_history = 72
   parameters_included = 3
 
   batch_size = 32
-  lr = 0.0001
+  lr = 0.0001 #original:0.0001
   epochs = 300
-  test_name = './' + str(station_id) + '_model1_'
+  test_name = './' + str(station_id) + '_model1_' + str(days_to_predict) +"d"
 
   # load data
   x_train, y_train, x_valid, y_valid, x_test, y_test, q_max, q_min = prepare_data(station_id, hours_of_history, hours_to_predict, parameters_included)
